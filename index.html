@@ -677,7 +677,7 @@ function exec(raw) {
 
   // Easter eggs first
   const lower = trimmed.toLowerCase();
-  if (doEaster(lower)) return;
+  if (checkEaster(lower)) { doEaster(lower); return; }
 
   switch(cmd) {
     case 'help': doHelp(); break;
@@ -891,6 +891,13 @@ function doStatus() {
 }
 
 // ─── EASTER EGGS ───
+const easterKeys = ['thorne','silas','the veil','the forgotten','spectral frequency','frame','hello','exit','quit','date','vance'];
+
+function checkEaster(lower) {
+  if (lower === 'logout' && !loggedIn) return false;
+  return easterKeys.includes(lower);
+}
+
 async function doEaster(lower) {
   if (lower === 'thorne' || lower === 'silas') {
     WB(); W('  ...', 'dim');
