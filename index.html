@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UMBRA — Terminal Access</title>
+<meta name="description" content="">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='none' stroke='%2300ff41' stroke-width='3'/><circle cx='50' cy='50' r='6' fill='%2300ff41'/></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --green: #00ff41;
+    --green-dim: #00cc33;
+    --green-faint: #00ff4115;
+    --green-ghost: #00ff4140;
+    --amber: #ffb000;
+    --red: #ff3333;
+    --cyan: #00e5ff;
+    --bg: #0a0a0a;
+    --bg-light: #111111;
+    --border: #00ff4125;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: var(--bg);
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    color: var(--green);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ═══ CRT EFFECTS ═══ */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,255,65,0.025) 1px, rgba(0,255,65,0.025) 2px);
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.45) 100%);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.82; }
+    94% { opacity: 1; }
+    96% { opacity: 0.91; }
+    97% { opacity: 1; }
+  }
+
+  #screen {
+    animation: flicker 8s infinite;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    overflow: hidden;
+  }
+
+  /* ═══ HEADER ═══ */
+  #header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--green-dim);
+    flex-shrink: 0;
+  }
+
+  .sys-badge { letter-spacing: 2px; }
+
+  .status-row { display: flex; gap: 20px; }
+  .status-row span::before { content: '● '; }
+  .status-row .s-on::before { color: var(--green); }
+  .status-row .s-warn::before { color: var(--amber); }
+
+  /* ═══ OUTPUT ═══ */
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--green-dim) var(--bg);
+  }
+
+  #output::-webkit-scrollbar { width: 5px; }
+  #output::-webkit-scrollbar-track { background: var(--bg); }
+  #output::-webkit-scrollbar-thumb { background: var(--green-dim); border-radius: 3px; }
+
+  .ln { margin-bottom: 1px; word-wrap: break-word; font-size: 13px; }
+  .ln.sys { color: var(--green-dim); font-size: 12px; }
+  .ln.err { color: var(--red); }
+  .ln.wrn { color: var(--amber); }
+  .ln.cyn { color: var(--cyan); }
+  .ln.dim { color: var(--green-ghost); font-size: 12px; }
+  .ln.hdr { color: var(--green); font-size: 13px; }
+  .ln.blk { height: 1.4em; }
+  .ln.echo { color: var(--green-ghost); }
+
+  /* File listing */
+  .fentry {
+    display: flex;
+    gap: 12px;
+    font-size: 13px;
+    padding: 1px 0;
+  }
+  .fentry .ficon { width: 22px; text-align: center; flex-shrink: 0; }
+  .fentry .fname { flex: 1; }
+  .fentry .fsize { width: 65px; text-align: right; color: var(--green-dim); font-size: 12px; }
+  .fentry .fdate { width: 90px; color: var(--green-dim); font-size: 11px; }
+  .fentry.locked { opacity: 0.5; }
+  .fentry.locked .fname::after { content: ' [LOCKED]'; color: var(--red); font-size: 11px; }
+  .fentry.dir .ficon { color: var(--cyan); }
+  .fentry.dir .fname { color: var(--cyan); }
+
+  /* Document display */
+  .doc-box {
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin: 8px 0;
+    background: var(--bg-light);
+    max-height: 60vh;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .doc-box::-webkit-scrollbar { width: 5px; }
+  .doc-box::-webkit-scrollbar-track { background: var(--bg-light); }
+  .doc-box::-webkit-scrollbar-thumb { background: var(--green-dim); }
+
+  .rdct {
+    background: var(--green-dim);
+    color: var(--bg);
+    padding: 0 3px;
+    user-select: none;
+    cursor: default;
+  }
+
+  /* ═══ INPUT ═══ */
+  #input-area {
+    display: none;
+    align-items: center;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    margin-top: 8px;
+    flex-shrink: 0;
+  }
+
+  #prompt {
+    color: var(--green);
+    margin-right: 8px;
+    font-weight: 600;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  #cmd {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    caret-color: var(--green);
+  }
+
+  #cmd.pw { -webkit-text-security: disc; }
+
+  /* ═══ GLITCH ═══ */
+  @keyframes glitch {
+    0% { transform: translate(0); filter: none; }
+    20% { transform: translate(-2px, 1px); filter: hue-rotate(90deg); }
+    40% { transform: translate(1px, -1px); }
+    60% { transform: translate(-1px, 2px); filter: hue-rotate(-90deg); }
+    80% { transform: translate(2px, -1px); }
+    100% { transform: translate(0); filter: none; }
+  }
+  .glitch { animation: glitch 0.3s ease-in-out; }
+
+  /* ═══ MOBILE ═══ */
+  @media (max-width: 768px) {
+    body { font-size: 12px; }
+    #screen { padding: 10px; }
+    .fentry .fdate { display: none; }
+    .fentry .fsize { display: none; }
+    .doc-box { max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<div id="screen">
+  <div id="header">
+    <span class="sys-badge">UMBRA-NET // ARCHIVE TERMINAL v3.1.7</span>
+    <div class="status-row">
+      <span class="s-warn">INTEGRITY: PARTIAL</span>
+      <span class="s-on">UPLINK: ACTIVE</span>
+    </div>
+  </div>
+  <div id="output"></div>
+  <div id="input-area">
+    <span id="prompt">GUEST@UMBRA-7C:~$</span>
+    <input type="text" id="cmd" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// UMBRA ARCHIVE TERMINAL
+// ═══════════════════════════════════════════════════════
+
+const O = document.getElementById('output');
+const IA = document.getElementById('input-area');
+const CMD = document.getElementById('cmd');
+const PR = document.getElementById('prompt');
+
+let user = 'GUEST', path = '~', level = 0, loggedIn = false;
+let awaitPW = false, hist = [], hIdx = -1;
+
+// ─── FILESYSTEM ───
+const FS = {
+  '~': { t:'d', c:['personnel','incidents','recordings','research','frame_project','readme.txt'] },
+  '~/readme.txt': { t:'f', s:'1.2K', d:'2026-01-14', a:0, doc:'readme' },
+  '~/personnel': { t:'d', c:['thorne_silas.doc','vance_eleanor.doc','site7c_roster.doc'] },
+  '~/personnel/thorne_silas.doc': { t:'f', s:'4.7K', d:'1986-03-14', a:0, doc:'thorne' },
+  '~/personnel/vance_eleanor.doc': { t:'f', s:'3.1K', d:'1986-04-02', a:3, lk:true },
+  '~/personnel/site7c_roster.doc': { t:'f', s:'6.8K', d:'1985-12-01', a:3, lk:true },
+  '~/incidents': { t:'d', c:['IR-7C-0187.doc','IR-7C-0193.doc','IR-7C-0201.doc'] },
+  '~/incidents/IR-7C-0187.doc': { t:'f', s:'8.2K', d:'1986-03-14', a:0, doc:'ir187' },
+  '~/incidents/IR-7C-0193.doc': { t:'f', s:'5.4K', d:'1986-06-22', a:5, lk:true },
+  '~/incidents/IR-7C-0201.doc': { t:'f', s:'2.1K', d:'1986-09-03', a:7, lk:true },
+  '~/recordings': { t:'d', c:['AR-7C-0301.txt','AR-7C-0308.txt','AR-7C-0315.txt'] },
+  '~/recordings/AR-7C-0301.txt': { t:'f', s:'5.9K', d:'1986-03-15', a:0, doc:'ar301' },
+  '~/recordings/AR-7C-0308.txt': { t:'f', s:'3.3K', d:'1986-06-01', a:5, lk:true },
+  '~/recordings/AR-7C-0315.txt': { t:'f', s:'1.8K', d:'1986-09-14', a:7, lk:true },
+  '~/research': { t:'d', c:['spectral_frequency_theory.doc','entity_classification.doc','veil_hypothesis.doc','thorne_personal_notes.doc'] },
+  '~/research/spectral_frequency_theory.doc': { t:'f', s:'6.1K', d:'1973-08-20', a:3, lk:true },
+  '~/research/entity_classification.doc': { t:'f', s:'12.4K', d:'1977-11-03', a:3, lk:true },
+  '~/research/veil_hypothesis.doc': { t:'f', s:'9.7K', d:'1976-05-14', a:5, lk:true },
+  '~/research/thorne_personal_notes.doc': { t:'f', s:'15.2K', d:'1986-03-11', a:7, lk:true },
+  '~/frame_project': { t:'d', c:['proposal.doc','construction_log.doc','calibration_data.doc','final_report.doc'] },
+  '~/frame_project/proposal.doc': { t:'f', s:'7.3K', d:'1978-11-12', a:5, lk:true },
+  '~/frame_project/construction_log.doc': { t:'f', s:'22.1K', d:'1984-02-28', a:5, lk:true },
+  '~/frame_project/calibration_data.doc': { t:'f', s:'8.9K', d:'1986-03-10', a:7, lk:true },
+  '~/frame_project/final_report.doc': { t:'f', s:'0.4K', d:'1986-03-12', a:7, lk:true, doc:'final_report' },
+};
+
+// ─── DOCUMENTS ───
+const DOCS = {
+readme: `<c=dim>UMBRA DIGITAL ARCHIVE — README</c>
+
+This terminal provides access to declassified and partially
+recovered documents from UMBRA Site 7C.
+
+Archive status: PARTIALLY CORRUPTED
+Last backup: March 1986
+Recovery date: [UNKNOWN]
+
+Many files were damaged during the incident of March 12, 1986.
+Some documents remain encrypted or require elevated clearance.
+
+If you have obtained access credentials, use the LOGIN command.
+
+<c=dim>Type HELP for available commands.</c>
+<c=dim>Type LS to view directory contents.</c>
+
+<c=wrn>WARNING: Unauthorized access to classified materials is</c>
+<c=wrn>a federal offense under Executive Order <r>██████</r>.</c>
+
+<c=cyn>[Archive note: This system was recovered from a decommissioned
+ server cluster. Origin and chain of custody unknown. —Ed.]</c>`,
+
+thorne: `<c=hdr>═══════════════════════════════════════════════════</c>
+<c=hdr>  UMBRA — PERSONNEL FILE</c>
+<c=hdr>  TOP SECRET — LEVEL 7 CLEARANCE REQUIRED</c>
+<c=hdr>═══════════════════════════════════════════════════</c>
+
+<c=hdr>FILE NO:        PF-7C-0041</c>
+<c=hdr>DATE OPENED:    September 3, 1971</c>
+<c=hdr>LAST UPDATED:   <c=err>March 14, 1986</c></c>
+
+  FULL NAME:        Dr. Silas Emery Thorne
+  DATE OF BIRTH:    April 17, 1938
+  CLEARANCE LEVEL:  7 (Maximum — Site Director)
+  POSITION:         Lead Archaeologist / Site 7C Director
+  TENURE:           1971 — <c=err>TERMINATED 1986</c>
+  STATUS:           <c=err>MISSING — PRESUMED LOST</c>
+
+<c=hdr>── BACKGROUND ──────────────────────────────────────</c>
+
+  Dr. Thorne joined UMBRA in 1971 following distinguished work
+  in theoretical archaeology at <r>████████████</r> University.
+  His early research focused on anomalous geological formations
+  and their correlation with unexplained electromagnetic
+  phenomena. Promoted to Lead Archaeologist in 1974.
+
+  In 1978, appointed Director of Site 7C following the discovery
+  of <r>████████████████████</r> during excavation of Sub-Level 2.
+  His proposal for "Project FRAME" was approved by UMBRA Central
+  Command on November 12, 1978.
+
+<c=hdr>── NOTABLE CONTRIBUTIONS ───────────────────────────</c>
+
+  — Developed Spectral Frequency Detection methodology (1973)
+  — Classified 7 anomalous entity types during 7B excavation
+  — Theorized the existence of "The Veil" (1976)
+  — Designed and constructed the Frame apparatus (1979-1984)
+  — First confirmed dimensional overlap: Breach Event Alpha (1984)
+
+<c=hdr>── INCIDENT — MARCH 12, 1986 ──────────────────────</c>
+
+  At approximately 02:30 hours, Dr. Thorne initiated an
+  unauthorized activation of the Frame apparatus. Security footage
+  shows Dr. Thorne entering the Frame chamber alone. At 02:47,
+  seismographs across Site 7C registered a magnitude <r>███</r>
+  event lasting 11 seconds.
+
+  When response teams reached the chamber at 02:53, Dr. Thorne
+  was not present. The Frame apparatus was intact but exhibited
+  residual <r>████████████</r>. Ambient temperature had dropped
+  to -23°C.
+
+<c=hdr>── CURRENT STATUS ─────────────────────────────────</c>
+
+  Classified as MISSING — PRESUMED LOST as of March 14, 1986.
+  Site 7C Sub-Level 3 sealed by order of <r>████████████</r>.
+
+  <c=err>NOTE: As of June 1986, personnel in Sub-Levels 1 and 2</c>
+  <c=err>have reported hearing Dr. Thorne's voice through the walls.</c>
+  <c=err>Audio analysis inconclusive. See IR-7C-0193.</c>
+
+<c=cyn>  [Handwritten margin note: "He's still in there.
+   I can hear him. — E.V."]</c>`,
+
+ir187: `<c=hdr>═══════════════════════════════════════════════════</c>
+<c=hdr>  UMBRA — INCIDENT REPORT</c>
+<c=hdr>  TOP SECRET — LEVEL 7 CLEARANCE REQUIRED</c>
+<c=hdr>═══════════════════════════════════════════════════</c>
+
+<c=hdr>REPORT NO:        IR-7C-0187</c>
+<c=hdr>DATE OF INCIDENT: March 12, 1986</c>
+<c=hdr>PREPARED BY:      Dr. Eleanor Vance, Acting Director</c>
+<c=hdr>SUBJECT:          Unauthorized Frame Activation / Personnel Loss</c>
+<c=hdr>SEVERITY:         <c=err>CRITICAL — CODE BLACK</c></c>
+
+<c=hdr>── I. SUMMARY ─────────────────────────────────────</c>
+
+  On March 12, 1986, at approximately 02:30 hours, Site Director
+  Dr. Silas Thorne initiated an unauthorized activation of the
+  Frame apparatus located in Sub-Level 3 of Site 7C. Dr. Thorne
+  entered the active Frame at 02:47 and has not been recovered.
+
+<c=hdr>── II. SEQUENCE OF EVENTS ──────────────────────────</c>
+
+<c=dim>  02:17 — Security camera S3-07 records Dr. Thorne entering
+          Sub-Level 3 using Level 7 keycard. He is alone.
+          Carrying personal journal and <r>██████████████</r>.</c>
+
+<c=dim>  02:23 — Frame power systems activate. Energy draw at
+          <r>████</r> kW. 300% above standard calibration.</c>
+
+<c=dim>  02:30 — Frame reaches full activation. Dr. Thorne observed
+          standing before the aperture, making notes.</c>
+
+<c=dim>  02:41 — Dr. Thorne places journal on floor, 2 meters from
+          Frame. Removes UMBRA ID badge. Places it on journal.</c>
+
+<c=dim>  02:44 — Security footage exhibits severe distortion. Audio
+          captures "a sound like tearing fabric, impossibly deep."</c>
+
+<c=dim>  02:47 — Dr. Thorne steps into the Frame aperture. Camera
+          S3-12 records 4 seconds of <r>████████████████████████</r>.
+          All Sub-Level 3 cameras go dark.</c>
+
+<c=dim>  02:47:11 — Seismographic event. Duration: 11 seconds.
+            Felt throughout Site 7C.</c>
+
+<c=dim>  02:48 — All electrical systems in Sub-Level 3 fail.
+          Temperature: 18°C → -23°C in under 60 seconds.</c>
+
+<c=dim>  02:53 — Response team reaches chamber. Dr. Thorne is not
+          present. Journal open to page reading:</c>
+
+<c=cyn>  "It was never a wall. It was a door. And something on the
+   other side has been knocking for a very long time."</c>
+
+<c=hdr>── III. ANOMALOUS OBSERVATIONS (POST-EVENT) ────────</c>
+
+  a) Persistent temperature anomaly (-8°C to -15°C, fluctuating)
+  b) Intermittent electromagnetic interference, all Sub-Level 3
+  c) <r>██████████████████████████████████████████████████████████</r>
+  d) Personnel report hearing Thorne's voice through walls
+     Speaking in <r>████████████</r>
+  e) Three (3) instances of spontaneous writing on chamber walls
+
+<c=hdr>── IV. RECOMMENDATIONS ────────────────────────────</c>
+
+  1. Immediate seal of Sub-Level 3.
+  2. 24-hour remote monitoring of Frame chamber.
+  3. Deny all requests to reactivate the Frame.
+  4. Reclassify Thorne's research to Level 7.
+  5. <r>████████████████████████████████████████████████████████</r>
+  6. Begin preparations for <r>████████████████</r> if escalation.
+
+  It is my professional assessment that Dr. Thorne knew exactly
+  what he was doing. Whether he intended to return is unclear.
+
+  What concerns me is observation (d). If that is Dr. Thorne's
+  voice, then some part of him may still exist beyond the Frame.
+  And if it is not his voice, then something is using it.
+
+<c=dim>  — Dr. Eleanor Vance, Acting Director, Site 7C</c>
+
+<c=cyn>  [Margin note: "They won't listen. Sub-Level 3 isn't
+   sealed enough. — E.V."]</c>`,
+
+ar301: `<c=hdr>═══════════════════════════════════════════════════</c>
+<c=hdr>  UMBRA — AUDIO RECORDING TRANSCRIPT</c>
+<c=hdr>  CLASSIFIED — LEVEL 5 CLEARANCE REQUIRED</c>
+<c=hdr>═══════════════════════════════════════════════════</c>
+
+<c=hdr>RECORDING ID:   AR-7C-0301</c>
+<c=hdr>DATE RECORDED:  March 15, 1986</c>
+<c=hdr>RECORDED BY:    Dr. Eleanor Vance</c>
+<c=hdr>DURATION:       4 minutes, 37 seconds</c>
+<c=hdr>MEDIUM:         Standard cassette tape (TDK SA-90)</c>
+
+<c=dim>[BEGIN TRANSCRIPT — AR-7C-0301]</c>
+
+<c=sys>[00:00 — Tape recorder clicks on. Faint hum in background.]</c>
+
+  VANCE: This is Dr. Eleanor Vance. Acting Director, Site 7C.
+  Recording for the record. The date is March 15th, 1986.
+  Time is... [pause] ...it's late. I don't know what time it
+  is. The clocks in Sub-Level 1 have been unreliable since
+  the event.
+
+<c=sys>[00:22 — Long pause. Papers shuffling.]</c>
+
+  VANCE: I need to get this on tape before I second-guess
+  myself. Before Central sends their team and decides what
+  the official story is going to be.
+
+  VANCE: On March 12th, Dr. Silas Thorne entered the Frame
+  chamber for what he logged as a "final calibration." He
+  activated the apparatus alone, at 2:30 in the morning,
+  with no support team and no authorization.
+
+<c=sys>[01:03 — Pause.]</c>
+
+  VANCE: He did not return.
+
+<c=sys>[01:07 — Faint sound in background. Ventilation or vibration.]</c>
+
+  VANCE: Something came back in his place. I want to be very
+  precise about this. The Frame was designed to observe. To
+  look through. Silas always said it was like pressing your
+  face to a window. But that night, the window opened. And I
+  don't think it closed properly.
+
+  VANCE: Since the event, we have recorded 14 instances of
+  anomalous activity within Site 7C. Cold spots.
+  Electromagnetic interference. Writing appearing on surfaces
+  where no one has been. And the voice.
+
+<c=sys>[01:52 — Vance's voice becomes quieter.]</c>
+
+  VANCE: Three members of the research team have reported
+  hearing Silas. Speaking from inside the walls. From below
+  the floor. The acoustic analysis is... inconclusive. The
+  voice matches his frequency profile, but the patterns are
+  wrong. The cadence. It speaks in fragments. Repeats things
+  he said years ago, but in the wrong order. Like something
+  learned his voice but doesn't understand language.
+
+<c=sys>[02:31 — Something falls in the background. Silence, 8 seconds.]</c>
+
+  VANCE: [whispered] ...that wasn't the vent.
+
+<c=sys>[02:42 — Vance composes herself.]</c>
+
+  VANCE: I've submitted my recommendations to Central. Seal
+  Sub-Level 3. Permanent monitoring. No reactivation of the
+  Frame under any circumstances. But Silas walked through a
+  door without knowing what was on the other side, and now
+  something is using his voice to talk to us.
+
+  VANCE: I will not make the same mistake.
+
+<c=sys>[03:19 — Long pause.]</c>
+
+  VANCE: One more thing. For whoever reviews this tape. I've
+  been going through Silas's personal research notes. The ones
+  he kept off the official servers. He knew. He knew what was
+  on the other side. He called it <r>████████████████████</r>.
+  He described it as... an absence. Not a creature. Not an
+  intelligence. An absence that watches. He wrote — and I'm
+  quoting —
+
+<c=cyn>  "It does not think. It does not want. It simply is, and
+   everything that touches it becomes part of what it is not."</c>
+
+  VANCE: I don't know what that means. I don't think Silas
+  fully understood either. But I think he went looking for
+  it anyway.
+
+<c=sys>[04:12 — Tape recorder being picked up.]</c>
+
+  VANCE: End of recording. Dr. Vance. March 15th. God help us.
+
+<c=sys>[04:17 — Click. Recording ends.]</c>
+
+<c=dim>[END TRANSCRIPT — AR-7C-0301]</c>
+
+<c=wrn>TRANSCRIBER'S NOTE: Background sound at 02:31 isolated and
+analyzed. Results filed under <r>██████████████</r>. Level 7 review.</c>
+
+<c=cyn>[Added June 1986, handwritten on original transcript:
+ "He didn't walk through a door. He answered a knock. — E.V."]</c>`,
+
+final_report: `<c=err>FILE CORRUPTED</c>
+
+<c=err>Recovery attempt 1 of 3... FAILED</c>
+<c=err>Recovery attempt 2 of 3... FAILED</c>
+<c=err>Recovery attempt 3 of 3... PARTIAL</c>
+
+<c=dim>Recovered fragments:</c>
+
+  ...the calibration was never the poi...
+  ...it responds to intent, not energy. The Fr...
+  ...Eleanor will understand eventually. I'm not...
+  ...not running from something. I'm answering...
+  ...the absence has a shape and the shape is...
+  <r>██████████████████████████████████████████████</r>
+
+<c=err>[REMAINING DATA UNRECOVERABLE]</c>`,
+};
+
+// ─── PASSWORDS ───
+const PASSWORDS = {
+  'FRAME-7C-1986': { level: 3, user: 'RESEARCHER' },
+  // Future ARG phases add more:
+  // 'VANCE-MARCH-15': { level: 5, user: 'SR_RESEARCHER' },
+  // '[PHASE_3_ANSWER]': { level: 7, user: 'DIRECTOR' },
+};
+
+// ─── OUTPUT ENGINE ───
+function W(text, cls='') {
+  const el = document.createElement('div');
+  el.className = 'ln ' + cls;
+  el.innerHTML = renderText(text);
+  O.appendChild(el);
+  O.scrollTop = O.scrollHeight;
+}
+function WB() { W('', 'blk'); }
+
+function renderText(s) {
+  return s
+    .replace(/<c=(\w+)>/g, (_, c) => `<span class="ln-${c}">`)
+    .replace(/<\/c>/g, '</span>')
+    .replace(/<r>/g, '<span class="rdct">')
+    .replace(/<\/r>/g, '</span>');
+}
+
+function renderDoc(key) {
+  const raw = DOCS[key];
+  if (!raw) return;
+
+  const box = document.createElement('div');
+  box.className = 'doc-box';
+
+  raw.split('\n').forEach(line => {
+    const p = document.createElement('div');
+    p.innerHTML = renderText(line) || '&nbsp;';
+    box.appendChild(p);
+  });
+
+  O.appendChild(box);
+  WB();
+  O.scrollTop = O.scrollHeight;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── BOOT ───
+async function boot() {
+  const lines = [
+    ['UMBRA-NET ARCHIVE SYSTEM', 'sys', 80],
+    ['Initializing terminal...', 'sys', 350],
+    ['', 'blk', 80],
+    ['Memory check.......... 640K OK', 'sys', 150],
+    ['Storage subsystem..... PARTIAL — 47 sectors damaged', 'sys', 150],
+    ['Network interface..... ACTIVE (read-only)', 'sys', 150],
+    ['Encryption layer...... DEGRADED', 'sys', 150],
+    ['Archive integrity..... 34% RECOVERED', 'sys', 300],
+    ['', 'blk', 150],
+  ];
+
+  for (const [text, cls, d] of lines) {
+    W(text, cls);
+    await sleep(d);
+  }
+
+  const logo = [
+    '  ██    ██ ███    ███ ██████  ██████   █████  ',
+    '  ██    ██ ████  ████ ██   ██ ██   ██ ██   ██ ',
+    '  ██    ██ ██ ████ ██ ██████  ██████  ███████ ',
+    '  ██    ██ ██  ██  ██ ██   ██ ██   ██ ██   ██ ',
+    '   ██████  ██      ██ ██████  ██   ██ ██   ██ ',
+  ];
+  for (const l of logo) { W(l, 'hdr'); await sleep(40); }
+
+  await sleep(200);
+
+  const post = [
+    ['', 'blk', 80],
+    ['  Unified Monitoring Bureau for Research into Anomalies', 'sys', 80],
+    ['  Department of Advanced Research — Est. 1962', 'sys', 80],
+    ['', 'blk', 100],
+    ['  ─────────────────────────────────────────────────', 'dim', 60],
+    ['', 'blk', 100],
+    ['  ARCHIVE TERMINAL — SITE 7C', '', 80],
+    ['  Access mode: GUEST (limited)', 'sys', 80],
+    ['  Files available: 4 of 17 recovered', 'sys', 80],
+    ['  13 files require elevated clearance.', 'sys', 80],
+    ['', 'blk', 100],
+    ['  Type HELP for commands. Type LS to browse files.', '', 80],
+    ['', 'blk', 80],
+  ];
+  for (const [text, cls, d] of post) { W(text, cls); await sleep(d); }
+
+  IA.style.display = 'flex';
+  CMD.focus();
+
+  await sleep(2500);
+  W('  ░░░ ANOMALOUS SIGNAL DETECTED — ORIGIN: SUB-LEVEL 3 ░░░', 'wrn');
+  W('  ░░░ Signal persists since March 12, 1986.             ░░░', 'wrn');
+  WB();
+}
+
+// ─── COMMANDS ───
+function exec(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed && !awaitPW) return;
+
+  if (awaitPW) {
+    W(`${PR.textContent} ${'•'.repeat(trimmed.length)}`, 'echo');
+    handlePW(trimmed);
+    return;
+  }
+
+  W(`${PR.textContent} ${trimmed}`, 'echo');
+  hist.unshift(trimmed); hIdx = -1;
+
+  const parts = trimmed.split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const args = parts.slice(1).join(' ');
+
+  // Easter eggs first
+  const lower = trimmed.toLowerCase();
+  if (doEaster(lower)) return;
+
+  switch(cmd) {
+    case 'help': doHelp(); break;
+    case 'ls': doLs(args); break;
+    case 'cd': doCd(args); break;
+    case 'cat': case 'read': case 'open': doRead(args); break;
+    case 'login': doLogin(); break;
+    case 'logout': doLogout(); break;
+    case 'whoami': doWhoami(); break;
+    case 'status': doStatus(); break;
+    case 'clear': O.innerHTML = ''; break;
+    case 'pwd': W(`  ${path}`); WB(); break;
+    default:
+      W(`  Command not recognized: ${cmd}`, 'err');
+      W('  Type HELP for available commands.', 'dim');
+      WB();
+  }
+}
+
+function doHelp() {
+  WB();
+  W('  ╔══════════════════════════════════════════════╗');
+  W('  ║           AVAILABLE COMMANDS                 ║');
+  W('  ╠══════════════════════════════════════════════╣');
+  W('  ║  LS [path]      List directory contents      ║');
+  W('  ║  CD <path>      Change directory             ║');
+  W('  ║  READ <file>    View file contents           ║');
+  W('  ║  PWD            Show current directory       ║');
+  W('  ║  LOGIN          Authenticate with password   ║');
+  W('  ║  LOGOUT         Return to guest access       ║');
+  W('  ║  WHOAMI         Show current access level    ║');
+  W('  ║  STATUS         System status                ║');
+  W('  ║  CLEAR          Clear terminal               ║');
+  W('  ║  HELP           Show this message            ║');
+  W('  ╚══════════════════════════════════════════════╝');
+  WB();
+}
+
+function doLs(arg) {
+  const target = resolve(arg || '');
+  const node = FS[target];
+  if (!node || node.t !== 'd') { W(`  Not a directory: ${arg || path}`, 'err'); WB(); return; }
+
+  WB();
+  W(`  ${target}/`, 'sys');
+  W('  ───────────────────────────────────────────', 'dim');
+
+  for (const child of node.c) {
+    const cp = target === '~' ? `~/${child}` : `${target}/${child}`;
+    const cn = FS[cp];
+    if (!cn) continue;
+
+    const isDir = cn.t === 'd';
+    const locked = cn.lk && level < cn.a;
+    const icon = isDir ? '📁' : (locked ? '🔒' : '📄');
+    const sz = cn.s || (isDir ? '&lt;DIR&gt;' : '');
+    const dt = cn.d || '';
+    let cls = 'fentry' + (isDir ? ' dir' : '') + (locked ? ' locked' : '');
+
+    const el = document.createElement('div');
+    el.className = cls;
+    el.innerHTML = `<span class="ficon">${icon}</span><span class="fname">${child}</span><span class="fsize">${sz}</span><span class="fdate">${dt}</span>`;
+    O.appendChild(el);
+  }
+  WB();
+  O.scrollTop = O.scrollHeight;
+}
+
+function doCd(arg) {
+  if (!arg || arg === '~') { path = '~'; upPrompt(); return; }
+  if (arg === '..') {
+    if (path === '~') return;
+    const p = path.split('/'); p.pop();
+    path = p.join('/') || '~';
+    upPrompt(); return;
+  }
+  const resolved = resolve(arg);
+  const node = FS[resolved];
+  if (!node) { W(`  Directory not found: ${arg}`, 'err'); WB(); return; }
+  if (node.t !== 'd') { W('  Not a directory. Use READ to view files.', 'wrn'); WB(); return; }
+  path = resolved;
+  upPrompt();
+}
+
+function doRead(arg) {
+  if (!arg) { W('  Usage: READ <filename>', 'wrn'); WB(); return; }
+
+  let resolved = resolve(arg);
+  let node = FS[resolved];
+
+  // Try partial match in current dir
+  if (!node) {
+    const dir = FS[path];
+    if (dir && dir.c) {
+      const match = dir.c.find(c => c.toLowerCase().includes(arg.toLowerCase()));
+      if (match) {
+        resolved = path === '~' ? `~/${match}` : `${path}/${match}`;
+        node = FS[resolved];
+      }
+    }
+  }
+
+  if (!node || node.t === 'd') { W(`  File not found: ${arg}`, 'err'); WB(); return; }
+  if (node.lk && level < node.a) {
+    WB();
+    W('  ⛔ ACCESS DENIED', 'err');
+    W(`  Required clearance: Level ${node.a}`, 'err');
+    W(`  Current clearance: Level ${level}`, 'dim');
+    W('  Use LOGIN to authenticate with elevated credentials.', 'dim');
+    WB();
+    return;
+  }
+  if (!node.doc) { W('  ⚠ FILE CORRUPTED — No recoverable data', 'wrn'); WB(); return; }
+
+  WB();
+  renderDoc(node.doc);
+}
+
+function doLogin() {
+  WB();
+  W('  ╔══════════════════════════════════════════════╗');
+  W('  ║       UMBRA AUTHENTICATION SYSTEM            ║');
+  W('  ╠══════════════════════════════════════════════╣');
+  W('  ║  Enter access code.                          ║');
+  W('  ║  Unauthorized attempts will be logged.        ║');
+  W('  ╚══════════════════════════════════════════════╝');
+  WB();
+  W('  Password: ', 'sys');
+  awaitPW = true;
+  CMD.classList.add('pw');
+}
+
+async function handlePW(pw) {
+  awaitPW = false;
+  CMD.classList.remove('pw');
+
+  const entry = PASSWORDS[pw.toUpperCase()];
+  if (entry) {
+    level = entry.level;
+    user = entry.user;
+    loggedIn = true;
+    upPrompt();
+    WB();
+    W('  ✓ AUTHENTICATION SUCCESSFUL', 'hdr');
+    W(`  Access level: ${level}`, 'sys');
+    W(`  Operator: ${user}`, 'sys');
+    const unlocked = Object.values(FS).filter(n => n.lk && n.a <= level).length;
+    W(`  ${unlocked} additional file(s) now accessible.`, 'sys');
+    WB();
+  } else {
+    WB();
+    W('  ✗ AUTHENTICATION FAILED', 'err');
+    W('  Invalid credentials. Attempt logged.', 'err');
+    WB();
+
+    // Certain wrong passwords trigger events
+    const upper = pw.toUpperCase();
+    if (upper.includes('THORNE') || upper.includes('SILAS')) {
+      await sleep(1500);
+      W('  ...', 'dim');
+      await sleep(1000);
+      W('  ░░░ he remembers his name ░░░', 'wrn');
+      WB();
+    } else if (upper.includes('FORGOTTEN')) {
+      await sleep(1000);
+      glitch();
+      await sleep(400);
+      W('  y̷o̶u̸ ̵r̶e̸m̶e̵m̸b̷e̴r̵e̶d̸', 'err');
+      await sleep(2000);
+      // Remove that line
+      const lines = O.querySelectorAll('.ln');
+      const last = lines[lines.length - 1];
+      if (last) last.textContent = '';
+      WB();
+    }
+  }
+}
+
+function doLogout() {
+  if (!loggedIn) { W('  Not logged in.', 'dim'); WB(); return; }
+  level = 0; user = 'GUEST'; loggedIn = false;
+  upPrompt();
+  W('  Logged out. Access reverted to GUEST.', 'sys');
+  WB();
+}
+
+function doWhoami() {
+  WB();
+  W(`  Operator:  ${user}`);
+  W(`  Access:    Level ${level}`);
+  W(`  Terminal:  UMBRA-7C Archive`);
+  W(`  Session:   ${loggedIn ? 'AUTHENTICATED' : 'GUEST'}`);
+  WB();
+}
+
+function doStatus() {
+  const total = Object.values(FS).filter(n => n.t === 'f').length;
+  const acc = Object.values(FS).filter(n => n.t === 'f' && (!n.lk || n.a <= level)).length;
+  WB();
+  W('  ╔══════════════════════════════════════════════╗');
+  W('  ║             SYSTEM STATUS                    ║');
+  W('  ╠══════════════════════════════════════════════╣');
+  W(`  ║  Archive files:    ${String(total).padEnd(3)} total               ║`);
+  W(`  ║  Accessible:       ${String(acc).padEnd(3)} files               ║`);
+  W(`  ║  Locked:           ${String(total-acc).padEnd(3)} files               ║`);
+  W('  ║  Integrity:        34% recovered            ║');
+  W('  ║  Last backup:      March 1986               ║');
+  W('  ║  Anomalous signal: PERSISTENT               ║');
+  W('  ╚══════════════════════════════════════════════╝');
+  WB();
+}
+
+// ─── EASTER EGGS ───
+async function doEaster(lower) {
+  if (lower === 'thorne' || lower === 'silas') {
+    WB(); W('  ...', 'dim');
+    await sleep(1200);
+    W('  He is not here.', 'wrn');
+    W('  He is not anywhere.', 'wrn');
+    W('  He is between.', 'err');
+    WB(); glitch();
+    return true;
+  }
+  if (lower === 'the veil') {
+    WB();
+    W('  ▮ RESTRICTED TOPIC ▮', 'err');
+    W('  All references to "The Veil" have been classified', 'wrn');
+    W('  Level 7 by UMBRA Central Command.', 'wrn');
+    WB();
+    W('  Do not discuss. Do not research.', 'err');
+    W('  Do not look for too long.', 'dim');
+    WB();
+    return true;
+  }
+  if (lower === 'the forgotten') {
+    WB(); W('  QUERY NOT RECOGNIZED', 'err');
+    await sleep(1000);
+    glitch();
+    await sleep(400);
+    W('  y̷o̶u̸ ̵r̶e̸m̶e̵m̸b̷e̴r̵e̶d̸', 'err');
+    await sleep(2000);
+    const lines = O.querySelectorAll('.ln');
+    if (lines.length) lines[lines.length - 1].textContent = '';
+    WB();
+    return true;
+  }
+  if (lower === 'spectral frequency') {
+    WB();
+    W('  SPECTRAL FREQUENCY DETECTION METHODOLOGY', 'hdr');
+    W('  Developed by Dr. Silas Thorne, 1973', 'sys');
+    WB();
+    W('  A method for detecting anomalous entities by measuring');
+    W('  electromagnetic frequency signatures that fall outside');
+    W('  known natural ranges.');
+    WB();
+    W('  Still in use. Still accurate.', 'dim');
+    W('  He got that part right, at least.', 'dim');
+    WB();
+    return true;
+  }
+  if (lower === 'frame') {
+    WB();
+    W('  PROJECT FRAME — STATUS: SUSPENDED', 'wrn');
+    W('  All Frame research indefinitely halted.', 'sys');
+    WB();
+    W('  The apparatus remains active.', 'err');
+    W('  It cannot be turned off.', 'err');
+    WB();
+    return true;
+  }
+  if (lower === 'hello') {
+    WB(); W('  ...hello?', 'dim'); WB();
+    return true;
+  }
+  if (lower === 'exit' || lower === 'quit' || lower === 'logout' && !loggedIn) {
+    if (lower === 'logout') return false;
+    WB();
+    W("  You can't leave.", 'err');
+    W('  No one leaves Site 7C.', 'dim');
+    WB();
+    return true;
+  }
+  if (lower === 'date') {
+    WB(); W('  June 14, 1986', 'sys');
+    W('  ...or is it?', 'dim'); WB();
+    return true;
+  }
+  if (lower === 'vance') {
+    WB();
+    W('  Dr. Eleanor Vance — Acting Director, Site 7C', 'sys');
+    W('  Status: ACTIVE (as of last backup)', 'sys');
+    WB();
+    W("  She stayed. Even after everyone else left.", 'dim');
+    W("  Someone had to keep watch.", 'dim');
+    WB();
+    return true;
+  }
+  return false;
+}
+
+// ─── UTILITIES ───
+function resolve(p) {
+  if (!p) return path;
+  if (p.startsWith('~/') || p === '~') return p;
+  return path === '~' ? `~/${p}` : `${path}/${p}`;
+}
+
+function upPrompt() {
+  const display = path === '~' ? '~' : path.replace('~/', '');
+  PR.textContent = `${user}@UMBRA-7C:${display}$`;
+}
+
+function glitch() {
+  document.getElementById('screen').classList.add('glitch');
+  setTimeout(() => document.getElementById('screen').classList.remove('glitch'), 300);
+}
+
+// ─── AMBIENT EVENTS ───
+const ambientMsgs = [
+  '  ░░░ signal interference detected ░░░',
+  '  ░░░ sub-level 3 temperature: -12°C ░░░',
+  '  ░░░ acoustic anomaly logged ░░░',
+  '  ░░░ frame chamber activity spike ░░░',
+  '  ░░░ unauthorized access attempt blocked ░░░',
+];
+
+function scheduleAmbient() {
+  const delay = 50000 + Math.random() * 100000;
+  setTimeout(() => {
+    if (document.hasFocus() && IA.style.display !== 'none') {
+      const msg = ambientMsgs[Math.floor(Math.random() * ambientMsgs.length)];
+      W(msg, 'dim');
+      if (Math.random() < 0.15) glitch();
+    }
+    scheduleAmbient();
+  }, delay);
+}
+
+// ─── INPUT HANDLING ───
+CMD.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { exec(CMD.value); CMD.value = ''; }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); if (hIdx < hist.length-1) { hIdx++; CMD.value = hist[hIdx]; } }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); if (hIdx > 0) { hIdx--; CMD.value = hist[hIdx]; } else { hIdx = -1; CMD.value = ''; } }
+});
+
+document.addEventListener('click', () => CMD.focus());
+
+// ─── INIT ───
+boot();
+scheduleAmbient();
+</script>
+</body>
+</html>
